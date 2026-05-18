@@ -17,8 +17,9 @@ app.use('/tasks', tasksRouter);
 app.use('/audit-logs', auditLogsRouter);
 
 // Global error handler
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });
 
 export default app;
