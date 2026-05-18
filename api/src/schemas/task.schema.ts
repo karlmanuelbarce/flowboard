@@ -4,7 +4,7 @@ const TaskStatus = z.enum(['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE']);
 const Priority = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 
 export const createTaskSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().min(100),
   description: z.string().optional(),
   status: TaskStatus.default('TODO'),
   priority: Priority.default('MEDIUM'),
@@ -12,7 +12,7 @@ export const createTaskSchema = z.object({
 });
 
 export const updateTaskSchema = z.object({
-  title: z.string().min(1).optional(),
+  title: z.string().min(100).optional(),
   description: z.string().optional(),
   status: TaskStatus.optional(),
   priority: Priority.optional(),
