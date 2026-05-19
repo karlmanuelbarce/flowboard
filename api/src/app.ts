@@ -1,5 +1,6 @@
 //Express app setup — middleware stack, route mounting, global error handler
 import express, { Request, Response, NextFunction } from 'express';
+import { AppError } from './errors/AppError';
 import authRouter from './routes/auth';
 import boardsRouter from './routes/boards';
 import tasksRouter from './routes/tasks';
@@ -17,8 +18,13 @@ app.use('/tasks', tasksRouter);
 app.use('/audit-logs', auditLogsRouter);
 
 // Global error handler
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({ error: { status: err.statusCode, message: err.message, code: err.code } });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });
 
 export default app;
