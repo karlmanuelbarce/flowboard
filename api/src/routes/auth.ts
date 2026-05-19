@@ -39,16 +39,20 @@ router.post("/register", validate(registerSchema), asyncHandler(async (req: Requ
   const hashed = await bcrypt.hash(password, SALT_ROUNDS);
   const user = await prisma.user.create({
     data: { email, password: hashed },
+    include: { boards: true },
   });
 
   const tokens = signTokens(user.id, user.email);
-  res.status(201).json({ user: { id: user.id, email: user.email }, ...tokens });
+  res.status(201).json({ user: { id: user.id, email: user.email, boards: user.boards }, ...tokens });
 }));
 
 router.post("/login", validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { boards: true },
+  });
   if (!user) {
     res.status(401).json({ error: { status: 401, message: "Invalid credentials" } });
     return;
@@ -61,7 +65,7 @@ router.post("/login", validate(loginSchema), asyncHandler(async (req: Request, r
   }
 
   const tokens = signTokens(user.id, user.email);
-  res.json({ user: { id: user.id, email: user.email }, ...tokens });
+  res.json({ user: { id: user.id, email: user.email, boards: user.boards }, ...tokens });
 }));
 
 router.post("/refresh", asyncHandler(async (req: Request, res: Response) => {
