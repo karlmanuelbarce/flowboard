@@ -2,10 +2,13 @@ import { Router, Request, Response } from "express";
 
 import { validate } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
+import { authenticate } from "../middleware/authenticate";
 import { prisma } from "../middleware/db";
-import { createBoardSchema, updateBoardSchema } from "../schemas/boards.schema";
+import { createBoardSchema } from "../schemas/boards.schema";
 
 const router = Router();
+
+router.use(authenticate);
 
 router.get("/", asyncHandler(async (req: Request, res: Response) => {
   const boards = await prisma.board.findMany({
@@ -15,7 +18,9 @@ router.get("/", asyncHandler(async (req: Request, res: Response) => {
 }));
 
 router.post("/", validate(createBoardSchema), asyncHandler(async (req: Request, res: Response) => {
-  const board = await prisma.board.create({ data: req.body });
+  const board = await prisma.board.create({
+    data: { ...req.body, ownerId: req.user!.userId },
+  });
   res.status(201).json(board);
 }));
 
