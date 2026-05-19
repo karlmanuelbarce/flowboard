@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 import { validate } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
+import { rateLimiter } from "../middleware/rateLimiter";
 import { prisma } from "../middleware/db";
 import { registerSchema, loginSchema } from "../schemas/auth.schema";
 
@@ -27,7 +28,7 @@ function signTokens(userId: string, email: string) {
   return { accessToken, refreshToken };
 }
 
-router.post("/register", validate(registerSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post("/register", asyncHandler(rateLimiter), validate(registerSchema), asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -46,7 +47,7 @@ router.post("/register", validate(registerSchema), asyncHandler(async (req: Requ
   res.status(201).json({ user: { id: user.id, email: user.email, boards: user.boards }, ...tokens });
 }));
 
-router.post("/login", validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post("/login", asyncHandler(rateLimiter), validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   const user = await prisma.user.findUnique({

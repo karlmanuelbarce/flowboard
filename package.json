@@ -25,6 +25,7 @@
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.10.0",
     "express": "^5.2.1",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
     "zod": "^4.4.3"
