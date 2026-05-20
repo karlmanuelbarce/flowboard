@@ -37,5 +37,20 @@ services:
       - ./api:/app/api
       - /app/node_modules
 
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: flowboard-worker
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/flowboard
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./worker/src:/app/src
+
 volumes:
   postgres_data:
