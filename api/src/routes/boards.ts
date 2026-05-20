@@ -12,6 +12,7 @@ router.use(authenticate);
 
 router.get("/", asyncHandler(async (req: Request, res: Response) => {
   const boards = await prisma.board.findMany({
+    where: { ownerId: req.user!.userId },
     orderBy: { createdAt: "desc" },
   });
   res.json(boards);
@@ -25,8 +26,8 @@ router.post("/", validate(createBoardSchema), asyncHandler(async (req: Request, 
 }));
 
 router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
-  const board = await prisma.board.findUnique({
-    where: { id: req.params.id as string },
+  const board = await prisma.board.findFirst({
+    where: { id: req.params.id as string, ownerId: req.user!.userId },
     include: { tasks: true },
   });
   if (!board) {
@@ -36,9 +37,15 @@ router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
   res.json(board);
 }));
 
-// owner-only
 router.delete("/:id", asyncHandler(async (req: Request, res: Response) => {
-  await prisma.board.delete({ where: { id: req.params.id as string } });
+  const board = await prisma.board.findFirst({
+    where: { id: req.params.id as string, ownerId: req.user!.userId },
+  });
+  if (!board) {
+    res.status(404).json({ error: { status: 404, message: "Board not found" } });
+    return;
+  }
+  await prisma.board.delete({ where: { id: board.id } });
   res.status(204).send();
 }));
 

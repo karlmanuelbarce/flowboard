@@ -19,21 +19,32 @@ function auditLog(userId: string, action: string, entityId: string) {
 router.get("/", asyncHandler(async (req: Request, res: Response) => {
   const { boardId } = req.query;
   const tasks = await prisma.task.findMany({
-    where: boardId ? { boardId: String(boardId) } : undefined,
+    where: {
+      board: { ownerId: req.user!.userId },
+      ...(boardId ? { boardId: String(boardId) } : {}),
+    },
     orderBy: { createdAt: "desc" },
   });
   res.json(tasks);
 }));
 
 router.post("/", validate(createTaskSchema), asyncHandler(async (req: Request, res: Response) => {
+  const board = await prisma.board.findFirst({
+    where: { id: req.body.boardId, ownerId: req.user!.userId },
+  });
+  if (!board) {
+    res.status(404).json({ error: { status: 404, message: "Board not found" } });
+    return;
+  }
   const task = await prisma.task.create({ data: req.body });
   await auditLog(req.user!.userId, "CREATE", task.id);
   res.status(201).json(task);
 }));
 
 router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  const task = await prisma.task.findUnique({ where: { id } });
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+  });
   if (!task) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
     return;
@@ -42,16 +53,28 @@ router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
 }));
 
 router.patch("/:id", validate(updateTaskSchema), asyncHandler(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  const task = await prisma.task.update({ where: { id }, data: req.body });
+  const existing = await prisma.task.findFirst({
+    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+  });
+  if (!existing) {
+    res.status(404).json({ error: { status: 404, message: "Task not found" } });
+    return;
+  }
+  const task = await prisma.task.update({ where: { id: existing.id }, data: req.body });
   await auditLog(req.user!.userId, "UPDATE", task.id);
   res.json(task);
 }));
 
 router.delete("/:id", asyncHandler(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  await prisma.task.delete({ where: { id } });
-  await auditLog(req.user!.userId, "DELETE", id);
+  const existing = await prisma.task.findFirst({
+    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+  });
+  if (!existing) {
+    res.status(404).json({ error: { status: 404, message: "Task not found" } });
+    return;
+  }
+  await prisma.task.delete({ where: { id: existing.id } });
+  await auditLog(req.user!.userId, "DELETE", existing.id);
   res.status(204).send();
 }));
 
