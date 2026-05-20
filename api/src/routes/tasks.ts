@@ -4,17 +4,12 @@ import { validate } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
 import { authenticate } from "../middleware/authenticate";
 import { prisma } from "../middleware/db";
+import { publishTaskEvent } from "../lib/events";
 import { createTaskSchema, updateTaskSchema } from "../schemas/task.schema";
 
 const router = Router();
 
 router.use(authenticate);
-
-function auditLog(userId: string, action: string, entityId: string) {
-  return prisma.auditLog.create({
-    data: { userId, action, entity: "Task", entityId },
-  });
-}
 
 router.get("/", asyncHandler(async (req: Request, res: Response) => {
   const { boardId } = req.query;
@@ -37,7 +32,7 @@ router.post("/", validate(createTaskSchema), asyncHandler(async (req: Request, r
     return;
   }
   const task = await prisma.task.create({ data: req.body });
-  await auditLog(req.user!.userId, "CREATE", task.id);
+  await publishTaskEvent({ taskId: task.id, action: 'CREATED', userId: req.user!.userId, payload: task as Record<string, unknown> });
   res.status(201).json(task);
 }));
 
@@ -61,7 +56,7 @@ router.patch("/:id", validate(updateTaskSchema), asyncHandler(async (req: Reques
     return;
   }
   const task = await prisma.task.update({ where: { id: existing.id }, data: req.body });
-  await auditLog(req.user!.userId, "UPDATE", task.id);
+  await publishTaskEvent({ taskId: task.id, action: 'UPDATED', userId: req.user!.userId, payload: task as Record<string, unknown> });
   res.json(task);
 }));
 
@@ -74,7 +69,7 @@ router.delete("/:id", asyncHandler(async (req: Request, res: Response) => {
     return;
   }
   await prisma.task.delete({ where: { id: existing.id } });
-  await auditLog(req.user!.userId, "DELETE", existing.id);
+  await publishTaskEvent({ taskId: existing.id, action: 'DELETED', userId: req.user!.userId, payload: { id: existing.id } });
   res.status(204).send();
 }));
 
