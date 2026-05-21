@@ -1,5 +1,6 @@
-//Express app setup — middleware stack, route mounting, global error handler
 import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
 import { AppError } from './errors/AppError';
 import authRouter from './routes/auth';
 import boardsRouter from './routes/boards';
@@ -9,7 +10,20 @@ import healthRouter from './routes/health';
 
 const app = express();
 
-app.use(express.json()); // Built-in middleware for parsing JSON bodies
+// Trust proxy headers for correct IP detection behind Nginx/load balancer
+app.set('trust proxy', 1);
+
+// Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+app.use(helmet());
+
+// CORS — only allow configured origins
+app.use(cors({
+  origin: process.env['ALLOWED_ORIGINS']?.split(',') ?? ['http://localhost:3000'],
+  credentials: true,
+}));
+
+// Body size limit — prevent large-payload DoS
+app.use(express.json({ limit: '10kb' }));
 
 app.use(healthRouter);
 app.use('/auth', authRouter);
@@ -17,13 +31,15 @@ app.use('/boards', boardsRouter);
 app.use('/tasks', tasksRouter);
 app.use('/audit-logs', auditLogsRouter);
 
-// Global error handler
+// Global error handler — no stack traces exposed in production
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: { status: err.statusCode, message: err.message, code: err.code } });
     return;
   }
-  console.error(err);
+  if (process.env['NODE_ENV'] !== 'production') {
+    console.error(err);
+  }
   res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });
 

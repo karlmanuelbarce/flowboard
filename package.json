@@ -4,7 +4,14 @@
   "private": true,
   "scripts": {
     "test": "npm --prefix api test",
-    "test:coverage": "npm --prefix api run test:coverage"
+    "test:coverage": "npm --prefix api run test:coverage",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:logs:api": "docker compose logs -f api",
+    "docker:logs:worker": "docker compose logs -f worker",
+    "docker:restart:api": "docker compose rm -f -s -v api && docker compose up --build api",
+    "docker:clean": "docker compose down -v"
   },
   "repository": {
     "type": "git",

@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 
 import { validate } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
-import { rateLimiter } from "../middleware/rateLimiter";
+import { rateLimiter, loginRateLimiter } from "../middleware/rateLimiter";
 import { prisma } from "../middleware/db";
 import redis from "../lib/redis";
 import { AppError } from "../errors/AppError";
@@ -13,7 +13,7 @@ import { registerSchema, loginSchema } from "../schemas/auth.schema";
 
 const router = Router();
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12;
 const ACCESS_EXPIRY = "15m";
 const REFRESH_EXPIRY = "7d";
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -57,7 +57,7 @@ router.post("/register", asyncHandler(rateLimiter), validate(registerSchema), as
   res.status(201).json({ user: { id: user.id, email: user.email, boards: user.boards }, ...tokens });
 }));
 
-router.post("/login", asyncHandler(rateLimiter), validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post("/login", asyncHandler(loginRateLimiter), validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   const user = await prisma.user.findUnique({
