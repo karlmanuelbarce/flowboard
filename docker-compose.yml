@@ -35,7 +35,7 @@ services:
       - redis
     volumes:
       - ./api:/app/api
-      - /app/node_modules
+      - /app/api/node_modules
 
   worker:
     build:
