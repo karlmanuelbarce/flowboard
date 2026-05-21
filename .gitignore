@@ -3,5 +3,5 @@ dist/
 build/
 .env
 *.db
-/generated/prisma
 coverage/
+api/src/generated/prisma
