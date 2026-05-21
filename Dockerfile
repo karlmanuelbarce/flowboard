@@ -1,13 +1,11 @@
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /app/api
 
 COPY package*.json ./
 RUN npm install
 
-COPY api/ ./api/
-
-WORKDIR /app/api
+COPY api/ ./
 
 RUN npx prisma generate
 

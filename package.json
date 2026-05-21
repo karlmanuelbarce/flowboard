@@ -4,7 +4,8 @@
   "description": "NodeJS part 2",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "cd api && npx jest --forceExit",
+    "test:coverage": "cd api && npx jest --coverage --forceExit"
   },
   "repository": {
     "type": "git",
@@ -31,6 +32,11 @@
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.0",
+    "@types/supertest": "^6.0.0",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.7.0",
     "@types/pg": "^8.20.0",

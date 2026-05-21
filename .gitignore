@@ -4,3 +4,4 @@ build/
 .env
 *.db
 /generated/prisma
+coverage/
