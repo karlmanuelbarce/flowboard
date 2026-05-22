@@ -174,6 +174,32 @@ Fields per entry: action, taskId, userId, payload (JSON), ts
 
 The background `worker/` service reads this stream and processes events asynchronously (AI summaries, notifications, audit logging). This decouples the HTTP response from any slow downstream work.
 
+### Dead Letter Queue (DLQ)
+
+If processing a message fails 3 times (e.g. Postgres is down), the worker moves it to the DLQ instead of dropping it.
+
+**DLQ key:** `tasks:events:dlq` (Redis Stream, no TTL — entries persist until manually cleared)
+
+**DLQ entry fields:**
+
+| Field | Example | Description |
+|---|---|---|
+| `action` | `CREATED` | Original task action |
+| `taskId` | `abc-123` | Task that triggered the event |
+| `userId` | `user-456` | User who performed the action |
+| `payload` | `{...}` | Full task JSON at time of event |
+| `ts` | `1716300000000` | Original event timestamp (ms) |
+| `originalId` | `1716300000000-0` | Redis Stream ID from `tasks:events` |
+| `failReason` | `max_retries_exceeded` | Why it was dead-lettered |
+
+```bash
+# Inspect the DLQ
+redis-cli XRANGE tasks:events:dlq - +
+
+# Clear after investigation
+redis-cli DEL tasks:events:dlq
+```
+
 ---
 
 ## SQL Injection — Why It Can't Happen
@@ -192,7 +218,8 @@ Prisma never interpolates user input into raw SQL strings. Every query goes thro
 | `JWT_ACCESS_SECRET` | auth routes + authenticate middleware | Signs/verifies access tokens |
 | `JWT_REFRESH_SECRET` | auth routes | Signs/verifies refresh tokens |
 | `ALLOWED_ORIGINS` | app.ts | Comma-separated list of allowed CORS origins |
-| `NODE_ENV` | app.ts error handler | Suppresses stack trace logging in `production` |
+| `NODE_ENV` | app.ts error handler, logger | Suppresses stack traces in `production`; enables pino-pretty in `development` |
+| `LOG_LEVEL` | lib/logger.ts | Pino log level (default: `info`) |
 
 ---
 

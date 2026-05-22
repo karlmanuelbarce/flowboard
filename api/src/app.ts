@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import pinoHttp from 'pino-http';
+import logger from './lib/logger';
 import { AppError } from './errors/AppError';
 import authRouter from './routes/auth';
 import boardsRouter from './routes/boards';
@@ -25,6 +27,9 @@ app.use(cors({
 // Body size limit — prevent large-payload DoS
 app.use(express.json({ limit: '10kb' }));
 
+// Structured request logging — method, path, status, duration
+app.use(pinoHttp({ logger }));
+
 app.use(healthRouter);
 app.use('/auth', authRouter);
 app.use('/boards', boardsRouter);
@@ -38,7 +43,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
   if (process.env['NODE_ENV'] !== 'production') {
-    console.error(err);
+    logger.error(err);
   }
   res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });

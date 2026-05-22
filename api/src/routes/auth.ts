@@ -9,7 +9,7 @@ import { rateLimiter, loginRateLimiter } from "../middleware/rateLimiter";
 import { prisma } from "../middleware/db";
 import redis from "../lib/redis";
 import { AppError } from "../errors/AppError";
-import { registerSchema, loginSchema } from "../schemas/auth.schema";
+import { registerSchema, loginSchema, refreshSchema, logoutSchema } from "../schemas/auth.schema";
 
 const router = Router();
 
@@ -79,11 +79,8 @@ router.post("/login", asyncHandler(loginRateLimiter), validate(loginSchema), asy
   res.json({ user: { id: user.id, email: user.email, boards: user.boards }, ...tokens });
 }));
 
-router.post("/refresh", asyncHandler(async (req: Request, res: Response) => {
+router.post("/refresh", validate(refreshSchema), asyncHandler(async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
-  if (!refreshToken) {
-    throw new AppError("Refresh token required", 400, "MISSING_REFRESH_TOKEN");
-  }
 
   let payload: { userId: string; email: string; tokenId: string };
   try {
@@ -97,7 +94,6 @@ router.post("/refresh", asyncHandler(async (req: Request, res: Response) => {
 
   const exists = await redis.get(key);
   if (!exists) {
-    // Token already used or never issued — possible replay attack
     throw new AppError("Refresh token not found or already used", 401, "REFRESH_TOKEN_REUSED");
   }
 
@@ -107,7 +103,7 @@ router.post("/refresh", asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: tokens });
 }));
 
-router.post("/logout", asyncHandler(async (req: Request, res: Response) => {
+router.post("/logout", validate(logoutSchema), asyncHandler(async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
 
   if (refreshToken) {

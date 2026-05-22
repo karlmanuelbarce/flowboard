@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
+import { z } from "zod";
 
-import { validate } from "../middleware/validation";
+import { validate, validateParams } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
 import { authenticate } from "../middleware/authenticate";
 import { prisma } from "../middleware/db";
@@ -8,6 +9,7 @@ import { publishTaskEvent } from "../lib/events";
 import { createTaskSchema, updateTaskSchema } from "../schemas/task.schema";
 
 const router = Router();
+const idParamsSchema = z.object({ id: z.string().uuid() });
 
 router.use(authenticate);
 
@@ -24,21 +26,24 @@ router.get("/", asyncHandler(async (req: Request, res: Response) => {
 }));
 
 router.post("/", validate(createTaskSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { title, description, status, priority, boardId } = req.body;
+
   const board = await prisma.board.findFirst({
-    where: { id: req.body.boardId, ownerId: req.user!.userId },
+    where: { id: boardId, ownerId: req.user!.userId },
   });
   if (!board) {
     res.status(404).json({ error: { status: 404, message: "Board not found" } });
     return;
   }
-  const task = await prisma.task.create({ data: req.body });
+
+  const task = await prisma.task.create({ data: { title, description, status, priority, boardId } });
   await publishTaskEvent({ taskId: task.id, action: 'CREATED', userId: req.user!.userId, payload: task as Record<string, unknown> });
   res.status(201).json(task);
 }));
 
-router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
+router.get("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
   const task = await prisma.task.findFirst({
-    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
   });
   if (!task) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
@@ -47,22 +52,24 @@ router.get("/:id", asyncHandler(async (req: Request, res: Response) => {
   res.json(task);
 }));
 
-router.patch("/:id", validate(updateTaskSchema), asyncHandler(async (req: Request, res: Response) => {
+router.patch("/:id", validateParams(idParamsSchema), validate(updateTaskSchema), asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.task.findFirst({
-    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
   });
   if (!existing) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
     return;
   }
-  const task = await prisma.task.update({ where: { id: existing.id }, data: req.body });
+
+  const { title, description, status, priority } = req.body;
+  const task = await prisma.task.update({ where: { id: existing.id }, data: { title, description, status, priority } });
   await publishTaskEvent({ taskId: task.id, action: 'UPDATED', userId: req.user!.userId, payload: task as Record<string, unknown> });
   res.json(task);
 }));
 
-router.delete("/:id", asyncHandler(async (req: Request, res: Response) => {
+router.delete("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.task.findFirst({
-    where: { id: req.params.id as string, board: { ownerId: req.user!.userId } },
+    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
   });
   if (!existing) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
