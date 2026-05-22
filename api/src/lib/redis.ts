@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import Redis from 'ioredis';
+import logger from './logger';
 
 const redis = new Redis({
   host: process.env['REDIS_HOST'] ?? 'redis',
@@ -7,6 +8,6 @@ const redis = new Redis({
   enableOfflineQueue: false,
 });
 
-redis.on('error', (err: Error) => console.error('Redis error:', err));
+redis.on('error', (err: Error) => logger.error({ err }, 'Redis error'));
 
 export default redis;
