@@ -8,7 +8,7 @@ import { prisma } from "../middleware/db";
 import { createBoardSchema } from "../schemas/boards.schema";
 
 const router = Router();
-const idParamsSchema = z.object({ id: z.string().uuid() });
+const idParamsSchema = z.object({ id: z.uuid() });
 
 router.use(authenticate);
 

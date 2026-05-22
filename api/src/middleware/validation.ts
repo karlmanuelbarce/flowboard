@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { ZodSchema, ZodError } from 'zod';
+import { ZodType, ZodError } from 'zod';
 
 function formatZodError(err: ZodError, res: Response) {
   return res.status(400).json({
@@ -12,7 +12,7 @@ function formatZodError(err: ZodError, res: Response) {
   });
 }
 
-export function validate(schema: ZodSchema) {
+export function validate(schema: ZodType) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       req.body = schema.parse(req.body);
@@ -24,7 +24,7 @@ export function validate(schema: ZodSchema) {
   };
 }
 
-export function validateParams(schema: ZodSchema) {
+export function validateParams(schema: ZodType) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       req.params = schema.parse(req.params) as ParamsDictionary;

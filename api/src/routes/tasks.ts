@@ -9,7 +9,7 @@ import { publishTaskEvent } from "../lib/events";
 import { createTaskSchema, updateTaskSchema } from "../schemas/task.schema";
 
 const router = Router();
-const idParamsSchema = z.object({ id: z.string().uuid() });
+const idParamsSchema = z.object({ id: z.uuid() });
 
 router.use(authenticate);
 
