@@ -106,13 +106,11 @@ router.post("/refresh", validate(refreshSchema), asyncHandler(async (req: Reques
 router.post("/logout", validate(logoutSchema), asyncHandler(async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
 
-  if (refreshToken) {
-    try {
-      const payload = jwt.verify(refreshToken, process.env["JWT_REFRESH_SECRET"]!) as { userId: string; tokenId: string };
-      await redis.del(`refresh:${payload.userId}:${payload.tokenId}`);
-    } catch {
-      // Invalid token — nothing to delete
-    }
+  try {
+    const payload = jwt.verify(refreshToken, process.env["JWT_REFRESH_SECRET"]!) as { userId: string; tokenId: string };
+    await redis.del(`refresh:${payload.userId}:${payload.tokenId}`);
+  } catch {
+    // Invalid token — nothing to delete
   }
 
   res.status(204).send();
