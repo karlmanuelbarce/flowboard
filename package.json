@@ -3,15 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "docker compose up --build -d",
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
     "test": "npm --prefix api test",
     "test:coverage": "npm --prefix api run test:coverage",
-    "docker:up": "docker compose up --build -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "docker:logs:api": "docker compose logs -f api",
-    "docker:logs:worker": "docker compose logs -f worker",
-    "docker:restart:api": "docker compose rm -f -s -v api && docker compose up --build api",
-    "docker:clean": "docker compose down -v"
+    "db:audit-logs": "docker exec flowboard-db psql -U postgres -d flowboard -c 'SELECT * FROM \"AuditLog\" ORDER BY \"createdAt\" DESC LIMIT 10;'"
   },
   "repository": {
     "type": "git",
