@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
+import logger from './lib/logger';
 
 const STREAM = 'tasks:events';
 const GROUP = 'audit-group';
@@ -19,7 +20,7 @@ const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
 async function ensureGroup(): Promise<void> {
   try {
     await redis.xgroup('CREATE', STREAM, GROUP, '0', 'MKSTREAM');
-    console.log(`Created consumer group "${GROUP}" on stream "${STREAM}"`);
+    logger.info({ group: GROUP, stream: STREAM }, 'Created consumer group');
   } catch (err) {
     if (!(err instanceof Error) || !err.message.includes('BUSYGROUP')) throw err;
   }
@@ -45,7 +46,7 @@ async function processMessage(id: string, fields: string[]): Promise<void> {
   const data = parseFields(fields);
   await writeAuditLog(data['userId'] ?? '', data['action'] ?? '', data['taskId'] ?? '');
   await redis.xack(STREAM, GROUP, id);
-  console.log(`[ACK] ${id} — ${data['action']} task:${data['taskId']}`);
+  logger.info({ messageId: id, action: data['action'], taskId: data['taskId'] }, 'Message processed');
 }
 
 async function reapPending(): Promise<void> {
@@ -59,7 +60,7 @@ async function reapPending(): Promise<void> {
     if (msgs.length > 0) {
       const [, msgFields] = msgs[0];
       await redis.xadd(DLQ, '*', ...msgFields, 'originalId', id, 'failReason', 'max_retries_exceeded');
-      console.warn(`[DLQ] ${id} moved after ${deliveryCount} failed attempts`);
+      logger.warn({ messageId: id, deliveryCount, dlq: DLQ }, 'Message moved to DLQ');
     }
     await redis.xack(STREAM, GROUP, id);
   }
@@ -67,7 +68,7 @@ async function reapPending(): Promise<void> {
 
 async function main(): Promise<void> {
   await ensureGroup();
-  console.log(`Consumer "${CONSUMER}" listening on stream "${STREAM}" (group: "${GROUP}")\n`);
+  logger.info({ consumer: CONSUMER, stream: STREAM, group: GROUP }, 'Worker listening');
 
   for (;;) {
     try {
@@ -88,18 +89,18 @@ async function main(): Promise<void> {
           try {
             await processMessage(id, fields);
           } catch (err) {
-            console.error(`[ERROR] Failed to process ${id}:`, err);
+            logger.error({ err, messageId: id }, 'Failed to process message');
           }
         }
       }
     } catch (err) {
-      console.error('[CONSUMER ERROR]', err);
+      logger.error({ err }, 'Consumer loop error');
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
 }
 
 main().catch((err) => {
-  console.error('Fatal:', err);
+  logger.error({ err }, 'Fatal worker error');
   process.exit(1);
 });

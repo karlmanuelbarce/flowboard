@@ -22,8 +22,11 @@ export async function waitForRedis() {
 
 export async function cleanRateLimits() {
   await waitForRedis();
-  const keys = await redis.keys('rate:*');
-  if (keys.length > 0) await redis.del(...keys);
+  const patterns = ['rate:*', 'loginAttempt:*', 'loginLock:*'];
+  for (const pattern of patterns) {
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) await redis.del(...keys);
+  }
 }
 
 export async function registerUser(email: string, password: string) {
