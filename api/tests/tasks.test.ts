@@ -70,6 +70,16 @@ describe('POST /tasks', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('returns 401 with an invalid JWT token', async () => {
+    const res = await request(app)
+      .post('/tasks')
+      .set('Authorization', 'Bearer not.a.valid.jwt')
+      .send({ title: 'Bad token', boardId });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toBe('Invalid or expired token');
+  });
 });
 
 // ─── List ────────────────────────────────────────────────────────────────────
@@ -130,6 +140,15 @@ describe('GET /tasks/:id', () => {
       .set('Authorization', `Bearer ${tokenA}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it('returns 400 for a non-UUID task id', async () => {
+    const res = await request(app)
+      .get('/tasks/not-a-uuid')
+      .set('Authorization', `Bearer ${tokenA}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Validation failed');
   });
 });
 

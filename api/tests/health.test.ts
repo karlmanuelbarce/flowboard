@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app, prisma } from './helpers';
+import { app, prisma, redis } from './helpers';
 
 afterAll(async () => {
   await prisma.$disconnect();
@@ -21,5 +21,15 @@ describe('GET /ready', () => {
     expect(res.body.status).toBe('ready');
     expect(res.body.db).toBe('ok');
     expect(res.body.redis).toBe('ok');
+  });
+
+  it('returns 503 when Redis is unavailable', async () => {
+    jest.spyOn(redis, 'ping').mockRejectedValueOnce(new Error('Redis down'));
+
+    const res = await request(app).get('/ready');
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('NOT_READY');
+
+    jest.restoreAllMocks();
   });
 });
