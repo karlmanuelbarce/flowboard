@@ -2,11 +2,11 @@
   "name": "flowboard-worker",
   "version": "1.0.0",
   "description": "Redis Stream consumer for Flowboard task events",
-  "main": "dist/consumer.js",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node src/consumer.ts",
+    "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/consumer.js"
+    "start": "node dist/index.js"
   },
   "type": "commonjs",
   "dependencies": {

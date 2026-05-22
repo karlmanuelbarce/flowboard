@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
 import logger from './lib/logger';
+import { handleTaskCreated } from './handlers/taskCreated';
+import { handleTaskUpdated } from './handlers/taskUpdated';
+import { handleTaskDeleted } from './handlers/taskDeleted';
 
 const STREAM = 'tasks:events';
 const GROUP = 'audit-group';
@@ -15,7 +16,13 @@ const redis = new Redis({
   port: Number(process.env['REDIS_PORT'] ?? 6379),
 });
 
-const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
+function parseFields(fields: string[]): Record<string, string> {
+  const data: Record<string, string> = {};
+  for (let i = 0; i < fields.length; i += 2) {
+    data[fields[i]] = fields[i + 1];
+  }
+  return data;
+}
 
 async function ensureGroup(): Promise<void> {
   try {
@@ -26,25 +33,18 @@ async function ensureGroup(): Promise<void> {
   }
 }
 
-function parseFields(fields: string[]): Record<string, string> {
-  const data: Record<string, string> = {};
-  for (let i = 0; i < fields.length; i += 2) {
-    data[fields[i]] = fields[i + 1];
+async function dispatch(action: string, userId: string, taskId: string): Promise<void> {
+  switch (action) {
+    case 'CREATED': return handleTaskCreated(userId, taskId);
+    case 'UPDATED': return handleTaskUpdated(userId, taskId);
+    case 'DELETED': return handleTaskDeleted(userId, taskId);
+    default: logger.warn({ action }, 'Unknown action — skipping');
   }
-  return data;
-}
-
-async function writeAuditLog(userId: string, action: string, taskId: string): Promise<void> {
-  await pool.query(
-    `INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId", "createdAt")
-     VALUES ($1, $2, $3, 'Task', $4, NOW())`,
-    [randomUUID(), userId, action, taskId],
-  );
 }
 
 async function processMessage(id: string, fields: string[]): Promise<void> {
   const data = parseFields(fields);
-  await writeAuditLog(data['userId'] ?? '', data['action'] ?? '', data['taskId'] ?? '');
+  await dispatch(data['action'] ?? '', data['userId'] ?? '', data['taskId'] ?? '');
   await redis.xack(STREAM, GROUP, id);
   logger.info({ messageId: id, action: data['action'], taskId: data['taskId'] }, 'Message processed');
 }
