@@ -1,11 +1,16 @@
 services:
-  db:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
-      POSTGRES_DB: flowboard_test
-
-  api:
-    environment:
-      DATABASE_URL: postgresql://postgres:password@db:5432/flowboard_test
+      DATABASE_URL: postgresql://postgres:password@db:5432/flowboard
       JWT_ACCESS_SECRET: test-access-secret
       JWT_REFRESH_SECRET: test-refresh-secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       NODE_ENV: test
+    depends_on:
+      - db
+      - redis
+    command: ["sh", "-c", "npx prisma migrate deploy && npx jest --forceExit"]
