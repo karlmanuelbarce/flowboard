@@ -7,8 +7,11 @@
     "start": "docker compose up -d",
     "stop": "docker compose down",
     "logs": "docker compose logs -f",
-    "test": "docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test",
-    "test:coverage": "docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test sh -c 'npx prisma migrate deploy && npx jest --coverage --forceExit'",
+    "test:up": "docker compose -f docker-compose.test.yml up -d --build",
+    "test:down": "docker compose -f docker-compose.test.yml down",
+    "test": "docker compose -f docker-compose.test.yml exec api npx jest",
+    "test:coverage": "docker compose -f docker-compose.test.yml exec api npx jest --coverage",
+    "test:ci": "npm run test:up && docker compose -f docker-compose.test.yml exec api npx jest --coverage; npm run test:down",
     "db:audit-logs": "docker exec flowboard-db psql -U postgres -d flowboard -c 'SELECT * FROM \"AuditLog\" ORDER BY \"createdAt\" DESC LIMIT 10;'"
   },
   "repository": {

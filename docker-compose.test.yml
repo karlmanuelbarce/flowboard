@@ -1,5 +1,25 @@
 services:
-  test:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: flowboard
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,6 +31,7 @@ services:
       REDIS_PORT: 6379
       NODE_ENV: test
     depends_on:
-      - db
-      - redis
-    command: ["sh", "-c", "npx prisma migrate deploy && npx jest --forceExit"]
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
