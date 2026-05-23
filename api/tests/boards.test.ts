@@ -40,13 +40,13 @@ describe('POST /boards', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 400 when name is missing', async () => {
+  it('returns 422 when name is missing', async () => {
     const res = await request(app)
       .post('/boards')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });
 
