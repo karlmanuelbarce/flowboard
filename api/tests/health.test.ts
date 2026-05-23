@@ -5,6 +5,17 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+describe('Body size limit', () => {
+  it('returns 413 when request body exceeds 10kb', async () => {
+    const res = await request(app)
+      .post('/auth/login')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'a'.repeat(11_000) }));
+
+    expect(res.status).toBe(413);
+  });
+});
+
 describe('GET /health', () => {
   it('returns ok with uptime', async () => {
     const res = await request(app).get('/health');
