@@ -108,6 +108,48 @@ describe('GET /boards/:id', () => {
   });
 });
 
+// ─── Update ──────────────────────────────────────────────────────────────────
+
+describe('PATCH /boards/:id', () => {
+  it('updates the board name for the owner', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: 'Renamed Board' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Renamed Board');
+    expect(res.body.id).toBe(boardId);
+  });
+
+  it('returns 403 when another user tries to update', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: 'Stolen Name' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 for a non-existent board', async () => {
+    const res = await request(app)
+      .patch('/boards/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: 'Ghost' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 422 when name is empty', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: '' });
+
+    expect(res.status).toBe(422);
+  });
+});
+
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 describe('DELETE /boards/:id', () => {
