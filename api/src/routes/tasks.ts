@@ -28,11 +28,13 @@ router.get("/", asyncHandler(async (req: Request, res: Response) => {
 router.post("/", validate(createTaskSchema), asyncHandler(async (req: Request, res: Response) => {
   const { title, description, status, priority, boardId } = req.body;
 
-  const board = await prisma.board.findFirst({
-    where: { id: boardId, ownerId: req.user!.userId },
-  });
+  const board = await prisma.board.findUnique({ where: { id: boardId } });
   if (!board) {
     res.status(404).json({ error: { status: 404, message: "Board not found" } });
+    return;
+  }
+  if (board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
     return;
   }
 
@@ -42,22 +44,33 @@ router.post("/", validate(createTaskSchema), asyncHandler(async (req: Request, r
 }));
 
 router.get("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
-  const task = await prisma.task.findFirst({
-    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
+  const task = await prisma.task.findUnique({
+    where: { id: String(req.params.id) },
+    include: { board: { select: { ownerId: true } } },
   });
   if (!task) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
     return;
   }
-  res.json(task);
+  if (task.board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
+    return;
+  }
+  const { board: _, ...taskData } = task;
+  res.json(taskData);
 }));
 
 router.patch("/:id", validateParams(idParamsSchema), validate(updateTaskSchema), asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.task.findFirst({
-    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
+  const existing = await prisma.task.findUnique({
+    where: { id: String(req.params.id) },
+    include: { board: { select: { ownerId: true } } },
   });
   if (!existing) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
+    return;
+  }
+  if (existing.board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
     return;
   }
 
@@ -68,11 +81,16 @@ router.patch("/:id", validateParams(idParamsSchema), validate(updateTaskSchema),
 }));
 
 router.delete("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.task.findFirst({
-    where: { id: String(req.params.id), board: { ownerId: req.user!.userId } },
+  const existing = await prisma.task.findUnique({
+    where: { id: String(req.params.id) },
+    include: { board: { select: { ownerId: true } } },
   });
   if (!existing) {
     res.status(404).json({ error: { status: 404, message: "Task not found" } });
+    return;
+  }
+  if (existing.board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
     return;
   }
   await prisma.task.delete({ where: { id: existing.id } });

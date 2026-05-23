@@ -54,13 +54,13 @@ describe('POST /tasks', () => {
     expect(res.body.error.message).toBe('Validation failed');
   });
 
-  it('returns 404 for a boardId that belongs to another user', async () => {
+  it('returns 403 for a boardId that belongs to another user', async () => {
     const res = await request(app)
       .post('/tasks')
       .set('Authorization', `Bearer ${tokenB}`)
       .send({ title: 'Steal task', boardId });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('returns 401 without auth token', async () => {
@@ -126,12 +126,12 @@ describe('GET /tasks/:id', () => {
     expect(res.body.id).toBe(taskId);
   });
 
-  it('returns 404 for another user\'s task', async () => {
+  it('returns 403 for another user\'s task', async () => {
     const res = await request(app)
       .get(`/tasks/${taskId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('returns 404 for a non-existent task id', async () => {
@@ -166,25 +166,25 @@ describe('PATCH /tasks/:id', () => {
     expect(res.body.title).toBe('Updated Task');
   });
 
-  it('returns 404 for another user\'s task', async () => {
+  it('returns 403 for another user\'s task', async () => {
     const res = await request(app)
       .patch(`/tasks/${taskId}`)
       .set('Authorization', `Bearer ${tokenB}`)
       .send({ status: 'DONE' });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 });
 
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 describe('DELETE /tasks/:id', () => {
-  it('returns 404 for another user\'s task', async () => {
+  it('returns 403 for another user\'s task', async () => {
     const res = await request(app)
       .delete(`/tasks/${taskId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('deletes the task for the owner', async () => {

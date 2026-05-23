@@ -10,6 +10,7 @@ const GROUP = 'audit-group';
 const CONSUMER = 'worker-1';
 const DLQ = 'tasks:events:dlq';
 const MAX_RETRIES = 3;
+const IDLE_THRESHOLD_MS = 5_000;
 
 const redis = new Redis({
   host: process.env['REDIS_HOST'] ?? 'localhost',
@@ -53,16 +54,28 @@ async function reapPending(): Promise<void> {
   type PendingEntry = [id: string, consumer: string, idleMs: number, deliveryCount: number];
   const pending = (await redis.xpending(STREAM, GROUP, '-', '+', 10)) as PendingEntry[];
 
-  for (const [id, , , deliveryCount] of pending) {
-    if (deliveryCount < MAX_RETRIES) continue;
+  for (const [id, , idleMs, deliveryCount] of pending) {
+    if (idleMs < IDLE_THRESHOLD_MS) continue;
 
-    const msgs = (await redis.xrange(STREAM, id, id)) as Array<[string, string[]]>;
-    if (msgs.length > 0) {
-      const [, msgFields] = msgs[0];
-      await redis.xadd(DLQ, '*', ...msgFields, 'originalId', id, 'failReason', 'max_retries_exceeded');
-      logger.warn({ messageId: id, deliveryCount, dlq: DLQ }, 'Message moved to DLQ');
+    if (deliveryCount >= MAX_RETRIES) {
+      const msgs = (await redis.xrange(STREAM, id, id)) as Array<[string, string[]]>;
+      if (msgs.length > 0) {
+        const [, msgFields] = msgs[0];
+        await redis.xadd(DLQ, '*', ...msgFields, 'originalId', id, 'failReason', 'max_retries_exceeded');
+        logger.warn({ messageId: id, deliveryCount, dlq: DLQ }, 'Message moved to DLQ');
+      }
+      await redis.xack(STREAM, GROUP, id);
+    } else {
+      // Reclaim the idle message and retry; delivery count increments on each claim
+      const claimed = (await redis.xclaim(STREAM, GROUP, CONSUMER, IDLE_THRESHOLD_MS, id)) as Array<[string, string[]]>;
+      for (const [msgId, fields] of claimed) {
+        try {
+          await processMessage(msgId, fields);
+        } catch (err) {
+          logger.error({ err, messageId: msgId }, 'Failed to process reclaimed message');
+        }
+      }
     }
-    await redis.xack(STREAM, GROUP, id);
   }
 }
 

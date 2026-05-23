@@ -91,12 +91,12 @@ describe('GET /boards/:id', () => {
     expect(Array.isArray(res.body.tasks)).toBe(true);
   });
 
-  it('returns 404 for another user\'s board', async () => {
+  it('returns 403 for another user\'s board', async () => {
     const res = await request(app)
       .get(`/boards/${boardId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('returns 404 for a non-existent board id', async () => {
@@ -111,12 +111,12 @@ describe('GET /boards/:id', () => {
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 describe('DELETE /boards/:id', () => {
-  it('returns 404 when another user tries to delete', async () => {
+  it('returns 403 when another user tries to delete', async () => {
     const res = await request(app)
       .delete(`/boards/${boardId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('deletes the board for the owner', async () => {
