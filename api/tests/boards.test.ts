@@ -40,13 +40,13 @@ describe('POST /boards', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 400 when name is missing', async () => {
+  it('returns 422 when name is missing', async () => {
     const res = await request(app)
       .post('/boards')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({});
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });
 
@@ -91,12 +91,12 @@ describe('GET /boards/:id', () => {
     expect(Array.isArray(res.body.tasks)).toBe(true);
   });
 
-  it('returns 404 for another user\'s board', async () => {
+  it('returns 403 for another user\'s board', async () => {
     const res = await request(app)
       .get(`/boards/${boardId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('returns 404 for a non-existent board id', async () => {
@@ -108,15 +108,57 @@ describe('GET /boards/:id', () => {
   });
 });
 
+// ─── Update ──────────────────────────────────────────────────────────────────
+
+describe('PATCH /boards/:id', () => {
+  it('updates the board name for the owner', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: 'Renamed Board' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Renamed Board');
+    expect(res.body.id).toBe(boardId);
+  });
+
+  it('returns 403 when another user tries to update', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: 'Stolen Name' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 for a non-existent board', async () => {
+    const res = await request(app)
+      .patch('/boards/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: 'Ghost' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 422 when name is empty', async () => {
+    const res = await request(app)
+      .patch(`/boards/${boardId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: '' });
+
+    expect(res.status).toBe(422);
+  });
+});
+
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 describe('DELETE /boards/:id', () => {
-  it('returns 404 when another user tries to delete', async () => {
+  it('returns 403 when another user tries to delete', async () => {
     const res = await request(app)
       .delete(`/boards/${boardId}`)
       .set('Authorization', `Bearer ${tokenB}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('deletes the board for the owner', async () => {

@@ -10,6 +10,10 @@ A reference document explaining the architecture, data flow, and security design
 Client
   │
   ▼
+Nginx (port 80) — nginx/nginx.conf
+  │  Proxies /api/* → api:3000 (strips /api prefix)
+  │
+  ▼
 Express App (api/src/app.ts)
   │  Security middleware stack (helmet → cors → body limit)
   │
@@ -24,7 +28,10 @@ Express App (api/src/app.ts)
   Redis (token store + rate limiting + event stream)
        │
        ▼
-  Worker (worker/) — consumes Redis Stream tasks:events
+  Worker (worker/src/index.ts) — consumes Redis Stream tasks:events
+    ├── handlers/taskCreated.ts  → writes CREATED AuditLog row
+    ├── handlers/taskUpdated.ts  → writes UPDATED AuditLog row
+    └── handlers/taskDeleted.ts  → writes DELETED AuditLog row
 ```
 
 ---
@@ -94,7 +101,7 @@ The refresh token carries a random `tokenId` (UUID). Redis stores `refresh:{user
 3. Deletes the old key, issues new token pair
 
 ### Logout — `POST /auth/logout`
-Verifies the refresh token, deletes its Redis key. Returns 204 regardless — even an invalid token gets a 204 so clients can't probe token validity.
+`refreshToken` is required in the request body. Verifies the JWT, deletes the `refresh:{userId}:{tokenId}` key from Redis. Returns 204 regardless — even an invalid token gets a 204 so clients can't probe token validity.
 
 ---
 
@@ -226,9 +233,12 @@ Prisma never interpolates user input into raw SQL strings. Every query goes thro
 ## File Map
 
 ```
+nginx/
+└── nginx.conf                 — proxies /api/* to api:3000; strips /api prefix
+
 api/src/
 ├── app.ts                     — middleware stack + error handler
-├── server.ts                  — binds to port 3000
+├── server.ts                  — binds to 0.0.0.0:3000
 ├── errors/AppError.ts         — typed error class (message, statusCode, code)
 ├── middleware/
 │   ├── authenticate.ts        — verifies JWT, attaches req.user
@@ -248,5 +258,16 @@ api/src/
 │   └── task.schema.ts         — create + update task schemas
 └── lib/
     ├── redis.ts               — ioredis client singleton
+    ├── logger.ts              — pino logger (pretty in dev, JSON in prod)
     └── events.ts              — publishTaskEvent() → Redis Stream
+
+worker/src/
+├── index.ts                   — Redis Stream consumer loop; dispatches by action
+├── handlers/
+│   ├── taskCreated.ts         — inserts CREATED AuditLog row
+│   ├── taskUpdated.ts         — inserts UPDATED AuditLog row
+│   └── taskDeleted.ts         — inserts DELETED AuditLog row
+└── lib/
+    ├── db.ts                  — pg Pool singleton
+    └── logger.ts              — pino logger
 ```

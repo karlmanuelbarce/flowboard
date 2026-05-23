@@ -37,14 +37,17 @@ app.use('/tasks', tasksRouter);
 app.use('/audit-logs', auditLogsRouter);
 
 // Global error handler — no stack traces exposed in production
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: { status: err.statusCode, message: err.message, code: err.code } });
     return;
   }
-  if (process.env['NODE_ENV'] !== 'production') {
-    logger.error(err);
+  // Body-parser and other http-errors set err.status (e.g. 413 PayloadTooLarge)
+  if (err.status && err.status < 500) {
+    res.status(err.status).json({ error: { status: err.status, message: err.message } });
+    return;
   }
+  logger.error(err);
   res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });
 

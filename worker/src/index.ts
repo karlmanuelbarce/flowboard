@@ -1,21 +1,32 @@
 import 'dotenv/config';
-import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
 import logger from './lib/logger';
+import { handleTaskCreated } from './handlers/taskCreated';
+import { handleTaskUpdated } from './handlers/taskUpdated';
+import { handleTaskDeleted } from './handlers/taskDeleted';
 
 const STREAM = 'tasks:events';
 const GROUP = 'audit-group';
 const CONSUMER = 'worker-1';
+// DLQ entry fields: all original message fields (action, taskId, userId, payload, ts)
+// plus `originalId` (the STREAM message ID) and `failReason` (always "max_retries_exceeded").
+// Written via: XADD tasks:events:dlq * <originalFields...> originalId <id> failReason max_retries_exceeded
 const DLQ = 'tasks:events:dlq';
 const MAX_RETRIES = 3;
+const IDLE_THRESHOLD_MS = 5_000;
 
 const redis = new Redis({
   host: process.env['REDIS_HOST'] ?? 'localhost',
   port: Number(process.env['REDIS_PORT'] ?? 6379),
 });
 
-const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
+function parseFields(fields: string[]): Record<string, string> {
+  const data: Record<string, string> = {};
+  for (let i = 0; i < fields.length; i += 2) {
+    data[fields[i]] = fields[i + 1];
+  }
+  return data;
+}
 
 async function ensureGroup(): Promise<void> {
   try {
@@ -26,25 +37,18 @@ async function ensureGroup(): Promise<void> {
   }
 }
 
-function parseFields(fields: string[]): Record<string, string> {
-  const data: Record<string, string> = {};
-  for (let i = 0; i < fields.length; i += 2) {
-    data[fields[i]] = fields[i + 1];
+async function dispatch(action: string, userId: string, taskId: string): Promise<void> {
+  switch (action) {
+    case 'CREATED': return handleTaskCreated(userId, taskId);
+    case 'UPDATED': return handleTaskUpdated(userId, taskId);
+    case 'DELETED': return handleTaskDeleted(userId, taskId);
+    default: logger.warn({ action }, 'Unknown action — skipping');
   }
-  return data;
-}
-
-async function writeAuditLog(userId: string, action: string, taskId: string): Promise<void> {
-  await pool.query(
-    `INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId", "createdAt")
-     VALUES ($1, $2, $3, 'Task', $4, NOW())`,
-    [randomUUID(), userId, action, taskId],
-  );
 }
 
 async function processMessage(id: string, fields: string[]): Promise<void> {
   const data = parseFields(fields);
-  await writeAuditLog(data['userId'] ?? '', data['action'] ?? '', data['taskId'] ?? '');
+  await dispatch(data['action'] ?? '', data['userId'] ?? '', data['taskId'] ?? '');
   await redis.xack(STREAM, GROUP, id);
   logger.info({ messageId: id, action: data['action'], taskId: data['taskId'] }, 'Message processed');
 }
@@ -53,16 +57,28 @@ async function reapPending(): Promise<void> {
   type PendingEntry = [id: string, consumer: string, idleMs: number, deliveryCount: number];
   const pending = (await redis.xpending(STREAM, GROUP, '-', '+', 10)) as PendingEntry[];
 
-  for (const [id, , , deliveryCount] of pending) {
-    if (deliveryCount < MAX_RETRIES) continue;
+  for (const [id, , idleMs, deliveryCount] of pending) {
+    if (idleMs < IDLE_THRESHOLD_MS) continue;
 
-    const msgs = (await redis.xrange(STREAM, id, id)) as Array<[string, string[]]>;
-    if (msgs.length > 0) {
-      const [, msgFields] = msgs[0];
-      await redis.xadd(DLQ, '*', ...msgFields, 'originalId', id, 'failReason', 'max_retries_exceeded');
-      logger.warn({ messageId: id, deliveryCount, dlq: DLQ }, 'Message moved to DLQ');
+    if (deliveryCount >= MAX_RETRIES) {
+      const msgs = (await redis.xrange(STREAM, id, id)) as Array<[string, string[]]>;
+      if (msgs.length > 0) {
+        const [, msgFields] = msgs[0];
+        await redis.xadd(DLQ, '*', ...msgFields, 'originalId', id, 'failReason', 'max_retries_exceeded');
+        logger.warn({ messageId: id, deliveryCount, dlq: DLQ }, 'Message moved to DLQ');
+      }
+      await redis.xack(STREAM, GROUP, id);
+    } else {
+      // Reclaim the idle message and retry; delivery count increments on each claim
+      const claimed = (await redis.xclaim(STREAM, GROUP, CONSUMER, IDLE_THRESHOLD_MS, id)) as Array<[string, string[]]>;
+      for (const [msgId, fields] of claimed) {
+        try {
+          await processMessage(msgId, fields);
+        } catch (err) {
+          logger.error({ err, messageId: msgId }, 'Failed to process reclaimed message');
+        }
+      }
     }
-    await redis.xack(STREAM, GROUP, id);
   }
 }
 

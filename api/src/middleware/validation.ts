@@ -3,9 +3,9 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { ZodType, ZodError } from 'zod';
 
 function formatZodError(err: ZodError, res: Response) {
-  return res.status(400).json({
+  return res.status(422).json({
     error: {
-      status: 400,
+      status: 422,
       message: 'Validation failed',
       details: err.issues.map(e => ({ field: e.path.join('.'), message: e.message })),
     },

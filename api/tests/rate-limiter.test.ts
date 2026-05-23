@@ -13,13 +13,27 @@ afterAll(async () => {
 // ─── General rate limiter ────────────────────────────────────────────────────
 
 describe('General rate limiter (rateLimiter)', () => {
+  beforeEach(async () => {
+    await cleanRateLimits();
+  });
+
   it('allows requests under the limit', async () => {
     const res = await request(app)
       .post('/auth/register')
       .send({ email: 'ratelimit-check@test.com' });
 
-    // 400 (validation error) — not 429
-    expect(res.status).toBe(400);
+    // 422 (validation error) — not 429
+    expect(res.status).toBe(422);
+  });
+
+  it('returns 429 RATE_LIMIT_EXCEEDED after 100 requests', async () => {
+    for (let i = 0; i < 100; i++) {
+      await request(app).post('/auth/register').send({ email: 'x' });
+    }
+
+    const res = await request(app).post('/auth/register').send({ email: 'x' });
+    expect(res.status).toBe(429);
+    expect(res.body.error.code).toBe('RATE_LIMIT_EXCEEDED');
   });
 });
 

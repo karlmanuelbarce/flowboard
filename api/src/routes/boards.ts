@@ -5,7 +5,7 @@ import { validate, validateParams } from "../middleware/validation";
 import { asyncHandler } from "../middleware/async-handler";
 import { authenticate } from "../middleware/authenticate";
 import { prisma } from "../middleware/db";
-import { createBoardSchema } from "../schemas/boards.schema";
+import { createBoardSchema, updateBoardSchema } from "../schemas/boards.schema";
 
 const router = Router();
 const idParamsSchema = z.object({ id: z.uuid() });
@@ -29,23 +29,44 @@ router.post("/", validate(createBoardSchema), asyncHandler(async (req: Request, 
 }));
 
 router.get("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
-  const board = await prisma.board.findFirst({
-    where: { id: String(req.params.id), ownerId: req.user!.userId },
+  const board = await prisma.board.findUnique({
+    where: { id: String(req.params.id) },
     include: { tasks: true },
   });
   if (!board) {
     res.status(404).json({ error: { status: 404, message: "Board not found" } });
     return;
   }
+  if (board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
+    return;
+  }
   res.json(board);
 }));
 
-router.delete("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
-  const board = await prisma.board.findFirst({
-    where: { id: String(req.params.id), ownerId: req.user!.userId },
-  });
+router.patch("/:id", validateParams(idParamsSchema), validate(updateBoardSchema), asyncHandler(async (req: Request, res: Response) => {
+  const board = await prisma.board.findUnique({ where: { id: String(req.params.id) } });
   if (!board) {
     res.status(404).json({ error: { status: 404, message: "Board not found" } });
+    return;
+  }
+  if (board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
+    return;
+  }
+  const { name } = req.body;
+  const updated = await prisma.board.update({ where: { id: board.id }, data: { name } });
+  res.json(updated);
+}));
+
+router.delete("/:id", validateParams(idParamsSchema), asyncHandler(async (req: Request, res: Response) => {
+  const board = await prisma.board.findUnique({ where: { id: String(req.params.id) } });
+  if (!board) {
+    res.status(404).json({ error: { status: 404, message: "Board not found" } });
+    return;
+  }
+  if (board.ownerId !== req.user!.userId) {
+    res.status(403).json({ error: { status: 403, message: "Forbidden" } });
     return;
   }
   await prisma.board.delete({ where: { id: board.id } });

@@ -17,13 +17,21 @@ services:
     ports:
       - "6379:6379"
 
+  nginx:
+    image: nginx:alpine
+    container_name: flowboard-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: flowboard-api
-    ports:
-      - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:password@db:5432/flowboard
       JWT_ACCESS_SECRET: change-me-access-secret

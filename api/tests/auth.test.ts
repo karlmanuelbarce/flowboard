@@ -37,20 +37,20 @@ describe('POST /auth/register', () => {
     expect(res.body.error.message).toBe('Email already in use');
   });
 
-  it('returns 400 when email is missing', async () => {
+  it('returns 422 when email is missing', async () => {
     const res = await request(app)
       .post('/auth/register')
       .send({ password: 'Password123!' });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
-  it('returns 400 when password is missing', async () => {
+  it('returns 422 when password is missing', async () => {
     const res = await request(app)
       .post('/auth/register')
       .send({ email: 'nopw@test.com' });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });
 
@@ -143,9 +143,9 @@ describe('POST /auth/refresh', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 400 when refresh token is missing', async () => {
+  it('returns 422 when refresh token is missing', async () => {
     const res = await request(app).post('/auth/refresh').send({});
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });
 

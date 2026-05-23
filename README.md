@@ -1,25 +1,25 @@
 # Flowboard
 
-A task management REST API built with Node.js, Express, PostgreSQL, and Redis. Features JWT authentication with token rotation, async event processing via Redis Streams, and structured logging.
+A task management REST API built with Node.js, Express, PostgreSQL, and Redis. Features JWT authentication with token rotation, async event processing via Redis Streams, structured logging, and an Nginx reverse proxy.
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌───────────────┐     ┌─────────────────┐
-│   Client    │────▶│  Flowboard    │────▶│   PostgreSQL    │
-│             │     │     API       │     │   (flowboard)   │
-└─────────────┘     │  (port 3000)  │     └─────────────────┘
-                    └───────┬───────┘              ▲
-                            │                      │
-                     Redis Stream             audit_logs
-                    tasks:events                   │
-                            │              ┌───────┴───────┐
-                            └─────────────▶│    Worker     │
-                                           │  (consumer)   │
-                                           └───────────────┘
+┌─────────────┐     ┌───────────────┐     ┌───────────────┐     ┌─────────────────┐
+│   Client    │────▶│     Nginx     │────▶│  Flowboard    │────▶│   PostgreSQL    │
+│             │     │   (port 80)   │     │     API       │     │   (flowboard)   │
+└─────────────┘     └───────────────┘     │  (port 3000)  │     └─────────────────┘
+                                          └───────┬───────┘              ▲
+                                                  │                      │
+                                           Redis Stream             audit_logs
+                                          tasks:events                   │
+                                                  │              ┌───────┴───────┐
+                                                  └─────────────▶│    Worker     │
+                                                                 │  (consumer)   │
+                                                                 └───────────────┘
 ```
 
-The **API** handles all HTTP requests, enforces auth, and publishes task mutation events to a Redis Stream. The **Worker** consumes those events and writes audit logs to PostgreSQL, decoupling audit writes from the request path.
+The **API** handles all HTTP requests, enforces auth, and publishes task mutation events to a Redis Stream. The **Worker** consumes those events and writes audit logs to PostgreSQL, decoupling audit writes from the request path. **Nginx** sits in front as a reverse proxy, forwarding `/api/*` traffic to the API.
 
 ## Tech Stack
 
@@ -31,6 +31,7 @@ The **API** handles all HTTP requests, enforces auth, and publishes task mutatio
 | ORM | Prisma 7 |
 | Database | PostgreSQL 16 |
 | Cache / Queue | Redis 7 |
+| Reverse Proxy | Nginx (Alpine) |
 | Auth | JWT (access + refresh) |
 | Validation | Zod |
 | Logging | Pino |
@@ -39,41 +40,22 @@ The **API** handles all HTTP requests, enforces auth, and publishes task mutatio
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) and Docker Compose
-- Node.js 20+ (for local development without Docker)
 
 ## Getting Started
-
-### With Docker (recommended)
 
 ```bash
 # Clone the repo
 git clone https://github.com/karlmanuelbarce/flowboard.git
 cd flowboard
 
-# Start all services (API, worker, PostgreSQL, Redis)
-npm run docker:up
+# Copy environment variables
+cp .env.example api/.env
 
-# The API is available at http://localhost:3000
-```
-
-### Local Development
-
-```bash
-# Start dependencies only
-docker compose up db redis -d
-
-# Install API dependencies and run migrations
-cd api
-npm install
-npx prisma migrate dev
-npm run dev
-
-# In another terminal, start the worker
-cd worker
-cp .env.example .env  # fill in values
-npm install
+# Build and start all services (migrations run automatically)
 npm run dev
 ```
+
+The API is available at `http://localhost/api/health`.
 
 ## Environment Variables
 
@@ -101,6 +83,8 @@ npm run dev
 ## API Reference
 
 All endpoints (except auth and health) require a Bearer token in the `Authorization` header.
+
+Base URL: `http://localhost/api`
 
 ### Auth
 
@@ -193,7 +177,7 @@ Access tokens expire in **15 minutes**; refresh tokens expire in **7 days**.
 3. When the access token expires, call `POST /auth/refresh` with the refresh token
 4. The refresh endpoint rotates the token — the old token is immediately invalidated
 
-Refresh tokens are stored in Redis (`refresh:{userId}:{tokenId}`) for revocation and replay detection. Reuse of an already-rotated token returns an error.
+Refresh tokens are stored in Redis (`refresh:{userId}:{tokenId}`) for revocation and replay detection. Reuse of an already-rotated token returns an error. Logout requires the refresh token and immediately deletes the Redis key.
 
 ## Redis Streams (Worker)
 
@@ -203,14 +187,16 @@ Every task create, update, or delete publishes an event to the `tasks:events` Re
 XADD tasks:events * action CREATED taskId <id> userId <id> payload {...} ts <timestamp>
 ```
 
-The worker consumes this stream via a consumer group (`audit-group`):
+The worker consumes this stream via a consumer group (`audit-group`), dispatching to a dedicated handler per action type:
 
 - Reads up to 10 messages per iteration with a 5-second block timeout
+- Dispatches to `handleTaskCreated`, `handleTaskUpdated`, or `handleTaskDeleted`
 - Writes an `AuditLog` record to PostgreSQL on success, then `XACK`s the message
 - Messages that fail 3 times are moved to `tasks:events:dlq` (dead letter queue)
 
 ## Security
 
+- **Nginx** — reverse proxy; only `/api/*` traffic reaches the API
 - **Helmet** — sets security headers (CSP, HSTS, X-Frame-Options, etc.)
 - **CORS** — configurable allowed origins
 - **Body size limit** — 10 KB max request body
@@ -221,23 +207,13 @@ The worker consumes this stream via a consumer group (`audit-group`):
 ## Scripts
 
 ```bash
-# Root
-npm run docker:up           # build and start all containers
-npm run docker:down         # stop all containers
-npm run docker:clean        # stop and remove volumes
-npm run docker:logs         # tail all container logs
-npm run docker:logs:api     # tail API logs only
-npm run docker:logs:worker  # tail worker logs only
-npm test                    # run API test suite
-npm run test:coverage       # run tests with coverage report
-
-# API (cd api/)
-npm run dev                 # start API with nodemon
-
-# Worker (cd worker/)
-npm run dev                 # start worker consumer
-npm run build               # compile TypeScript
-npm start                   # run compiled worker
+npm run dev            # build images and start all containers (migrations run automatically)
+npm start              # start containers without rebuilding
+npm stop               # stop all containers
+npm run logs           # tail all container logs
+npm test               # run API test suite
+npm run test:coverage  # run tests with coverage report
+npm run db:audit-logs  # view latest 10 audit log entries
 ```
 
 ## Testing
@@ -247,29 +223,37 @@ npm test               # runs all tests once
 npm run test:coverage  # generates coverage report in api/coverage/
 ```
 
-Tests use Supertest against the live Express app and require a running PostgreSQL and Redis instance (or use the Docker services).
+Tests use Supertest against the live Express app and require PostgreSQL and Redis to be running (`npm start` first).
 
 ## Project Structure
 
 ```
 flowboard/
+├── nginx/
+│   └── nginx.conf             # reverse proxy config
 ├── api/
 │   ├── prisma/
 │   │   ├── schema.prisma
 │   │   └── migrations/
 │   └── src/
-│       ├── errors/        # AppError class
-│       ├── lib/           # Redis client, Pino logger, event publisher
-│       ├── middleware/    # auth, rate limiter, validation, error handler
-│       ├── routes/        # auth, boards, tasks, audit-logs, health
-│       ├── schemas/       # Zod validation schemas
-│       ├── app.ts         # Express app setup
-│       └── server.ts      # HTTP server entry point
+│       ├── errors/            # AppError class
+│       ├── lib/               # Redis client, Pino logger, event publisher
+│       ├── middleware/        # auth, rate limiter, validation, error handler
+│       ├── routes/            # auth, boards, tasks, audit-logs, health
+│       ├── schemas/           # Zod validation schemas
+│       ├── app.ts             # Express app setup
+│       └── server.ts          # HTTP server entry point (binds 0.0.0.0:3000)
 ├── worker/
 │   └── src/
-│       ├── lib/           # Pino logger
-│       └── consumer.ts    # Redis Stream consumer loop
+│       ├── handlers/
+│       │   ├── taskCreated.ts
+│       │   ├── taskUpdated.ts
+│       │   └── taskDeleted.ts
+│       ├── lib/               # Pino logger, pg pool
+│       └── index.ts           # Redis Stream consumer loop
 ├── docker-compose.yml
-├── Dockerfile             # API container
-└── package.json           # Root scripts
+├── docker-compose.test.yml    # test database override
+├── Dockerfile                 # API container (runs migrations then starts server)
+├── .env.example               # environment variable template
+└── package.json               # root scripts
 ```
