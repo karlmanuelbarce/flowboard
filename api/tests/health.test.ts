@@ -32,4 +32,14 @@ describe('GET /ready', () => {
 
     jest.restoreAllMocks();
   });
+
+  it('returns 503 when PostgreSQL is unavailable', async () => {
+    jest.spyOn(prisma, '$queryRaw').mockRejectedValueOnce(new Error('DB down'));
+
+    const res = await request(app).get('/ready');
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('NOT_READY');
+
+    jest.restoreAllMocks();
+  });
 });

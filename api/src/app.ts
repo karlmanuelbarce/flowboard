@@ -42,9 +42,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     res.status(err.statusCode).json({ error: { status: err.statusCode, message: err.message, code: err.code } });
     return;
   }
-  if (process.env['NODE_ENV'] !== 'production') {
-    logger.error(err);
-  }
+  logger.error(err);
   res.status(500).json({ error: { status: 500, message: 'Internal server error' } });
 });
 
