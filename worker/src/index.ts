@@ -8,6 +8,9 @@ import { handleTaskDeleted } from './handlers/taskDeleted';
 const STREAM = 'tasks:events';
 const GROUP = 'audit-group';
 const CONSUMER = 'worker-1';
+// DLQ entry fields: all original message fields (action, taskId, userId, payload, ts)
+// plus `originalId` (the STREAM message ID) and `failReason` (always "max_retries_exceeded").
+// Written via: XADD tasks:events:dlq * <originalFields...> originalId <id> failReason max_retries_exceeded
 const DLQ = 'tasks:events:dlq';
 const MAX_RETRIES = 3;
 const IDLE_THRESHOLD_MS = 5_000;

@@ -1,8 +1,18 @@
 import request from 'supertest';
+import logger from '../src/lib/logger';
 import { app, prisma, redis } from './helpers';
 
 afterAll(async () => {
   await prisma.$disconnect();
+});
+
+describe('Redis error handler', () => {
+  it('logs redis connection errors without crashing', () => {
+    const spy = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    redis.emit('error', new Error('test connection error'));
+    expect(spy).toHaveBeenCalledWith({ err: expect.any(Error) }, 'Redis error');
+    spy.mockRestore();
+  });
 });
 
 describe('Body size limit', () => {
