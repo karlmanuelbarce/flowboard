@@ -18,8 +18,8 @@ describe('General rate limiter (rateLimiter)', () => {
       .post('/auth/register')
       .send({ email: 'ratelimit-check@test.com' });
 
-    // 400 (validation error) — not 429
-    expect(res.status).toBe(400);
+    // 422 (validation error) — not 429
+    expect(res.status).toBe(422);
   });
 });
 
